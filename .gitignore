@@ -1,4 +1,5 @@
 *.sw?
 *.userprefs
+*.suo
 [Bb]in/
 [Oo]bj/
