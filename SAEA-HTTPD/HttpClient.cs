@@ -5,7 +5,7 @@ using System.Net.Sockets;
 using log4net;
 
 namespace SAEAHTTPD {
-	public class HttpClient {
+    public class HttpClient {
         private const char[] HEADER_SPLIT = { ':' };
         public Socket Socket { get; internal set; }
         public Stream RequestStream { get; private set; }
@@ -23,12 +23,12 @@ namespace SAEAHTTPD {
         private int transferEncodedChunkSize = 0;
         private int transferEncodedChunkRemaining = 0;
 
-		public HttpClient () {
-            this.RequestStream = new MemoryStream();
+        public HttpClient () {
+            this.RequestStream = new MemoryStream ();
             this.State = HttpState.RequestLine;
-            this.Request = new HttpRequest();
-            this.Response = new HttpResponse();
-		}
+            this.Request = new HttpRequest ();
+            this.Response = new HttpResponse ();
+        }
 
         public void ProcessHTTP() {
             var memoryStream = this.RequestStream as MemoryStream;
@@ -141,6 +141,6 @@ namespace SAEAHTTPD {
             this.Response = new HttpResponse();
             this.State = HttpState.RequestLine;
         }
-	}
+    }
 }
 

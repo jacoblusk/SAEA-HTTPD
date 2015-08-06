@@ -10,16 +10,16 @@ using System.Timers;
 using log4net;
 
 namespace SAEAHTTPD {
-	public class HttpServer {
+    public class HttpServer {
         private readonly List<SocketAsyncEventArgs> connections = new List<SocketAsyncEventArgs>();
-		private readonly ConcurrentStack<SocketAsyncEventArgs> readWritePool = new ConcurrentStack<SocketAsyncEventArgs> ();
-		private readonly ConcurrentStack<SocketAsyncEventArgs> acceptPool = new ConcurrentStack<SocketAsyncEventArgs> ();
+        private readonly ConcurrentStack<SocketAsyncEventArgs> readWritePool = new ConcurrentStack<SocketAsyncEventArgs> ();
+        private readonly ConcurrentStack<SocketAsyncEventArgs> acceptPool = new ConcurrentStack<SocketAsyncEventArgs> ();
         private bool running = true;
-		private int maxAccept, maxConnections, bufferSize;
+        private int maxAccept, maxConnections, bufferSize;
         private const int Timeout = 10 * 1000;
-		private readonly Semaphore enforceMaxClients;
-		private readonly Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-		private readonly BufferManager bufferManager;
+        private readonly Semaphore enforceMaxClients;
+        private readonly Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        private readonly BufferManager bufferManager;
         private System.Timers.Timer timeoutTimer;
 
         private static readonly ILog log = log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
@@ -27,32 +27,32 @@ namespace SAEAHTTPD {
         public delegate void HttpRequestHandler(object sender, HttpRequestArgs e);
         public event HttpRequestHandler OnHttpRequest;
 
-		public HttpServer (int maxAccept, int maxConnections, int bufferSize) {
+        public HttpServer (int maxAccept, int maxConnections, int bufferSize) {
             timeoutTimer = new System.Timers.Timer(Timeout);
             timeoutTimer.Elapsed += timeoutTimer_Elapsed;
-			this.maxAccept = maxAccept;
-			this.maxConnections = maxConnections;
-			this.bufferSize = bufferSize;
-			this.enforceMaxClients = new Semaphore (maxConnections, maxConnections);
-			this.bufferManager = BufferManager.CreateBufferManager (maxConnections, maxConnections * bufferSize * 2);
+            this.maxAccept = maxAccept;
+            this.maxConnections = maxConnections;
+            this.bufferSize = bufferSize;
+            this.enforceMaxClients = new Semaphore (maxConnections, maxConnections);
+            this.bufferManager = BufferManager.CreateBufferManager (maxConnections, maxConnections * bufferSize * 2);
 
-			for (int i = 0; i < maxAccept; i++) {
-				var acceptArgs = new SocketAsyncEventArgs ();
-				acceptArgs.Completed += HandleAcceptCompleted;
-				this.acceptPool.Push (acceptArgs);
-			}
+            for (int i = 0; i < maxAccept; i++) {
+                var acceptArgs = new SocketAsyncEventArgs ();
+                acceptArgs.Completed += HandleAcceptCompleted;
+                this.acceptPool.Push (acceptArgs);
+            }
 
-			for (int i = 0; i < maxConnections; i++) {
-				var readWriteArgs = new SocketAsyncEventArgs ();
-				var client = new HttpClient ();
-				readWriteArgs.UserToken = client;
-				readWriteArgs.SetBuffer (this.bufferManager.TakeBuffer (bufferSize), 0, bufferSize);
-				readWriteArgs.Completed += HandleReadWriteCompleted;
-				this.readWritePool.Push (readWriteArgs);
-			}
+            for (int i = 0; i < maxConnections; i++) {
+                var readWriteArgs = new SocketAsyncEventArgs ();
+                var client = new HttpClient ();
+                readWriteArgs.UserToken = client;
+                readWriteArgs.SetBuffer (this.bufferManager.TakeBuffer (bufferSize), 0, bufferSize);
+                readWriteArgs.Completed += HandleReadWriteCompleted;
+                this.readWritePool.Push (readWriteArgs);
+            }
 
             timeoutTimer.Start();
-		}
+        }
 
         void timeoutTimer_Elapsed(object sender, ElapsedEventArgs e) {
             lock (this.connections) {
@@ -78,11 +78,11 @@ namespace SAEAHTTPD {
             }
         }
 
-		public void Start(IPEndPoint local) {
-			this.listener.Bind (local);
-			this.listener.Listen (this.maxAccept);
+        public void Start(IPEndPoint local) {
+            this.listener.Bind (local);
+            this.listener.Listen (this.maxAccept);
 
-			SocketAsyncEventArgs acceptArgs;
+            SocketAsyncEventArgs acceptArgs;
             while (this.running) {
                 if (acceptPool.TryPop(out acceptArgs)) {
                     if (!this.listener.AcceptAsync(acceptArgs)) {
@@ -91,36 +91,36 @@ namespace SAEAHTTPD {
                 }
                 this.enforceMaxClients.WaitOne();
             }
-		}
+        }
 
         public void Stop(bool force) {
             this.running = false;
         }
 
-		private void HandleAccept(SocketAsyncEventArgs acceptArgs) {
+        private void HandleAccept(SocketAsyncEventArgs acceptArgs) {
             log.Debug(string.Format("Accept, {0}", acceptArgs.AcceptSocket.RemoteEndPoint));
-			if (acceptArgs.SocketError != SocketError.Success) {
-				acceptArgs.AcceptSocket.Close ();
-			} else {
-				SocketAsyncEventArgs readWriteArgs;
-				if (this.readWritePool.TryPop (out readWriteArgs)) {
-					var client = (HttpClient)readWriteArgs.UserToken;
-					client.Socket = acceptArgs.AcceptSocket;
+            if (acceptArgs.SocketError != SocketError.Success) {
+                acceptArgs.AcceptSocket.Close ();
+            } else {
+                SocketAsyncEventArgs readWriteArgs;
+                if (this.readWritePool.TryPop (out readWriteArgs)) {
+                    var client = (HttpClient)readWriteArgs.UserToken;
+                    client.Socket = acceptArgs.AcceptSocket;
                     client.LastActive = Environment.TickCount;
-					readWriteArgs.AcceptSocket = acceptArgs.AcceptSocket;
-					acceptArgs.AcceptSocket = null;
+                    readWriteArgs.AcceptSocket = acceptArgs.AcceptSocket;
+                    acceptArgs.AcceptSocket = null;
 
                     lock (this.connections) {
                         this.connections.Add(readWriteArgs);
                     }
 
-					if (!client.Socket.ReceiveAsync (readWriteArgs)) {
-						HandleReadWrite (readWriteArgs);
-					}
-				}
-			}
-			this.acceptPool.Push (acceptArgs);
-		}
+                    if (!client.Socket.ReceiveAsync (readWriteArgs)) {
+                        HandleReadWrite (readWriteArgs);
+                    }
+                }
+            }
+            this.acceptPool.Push (acceptArgs);
+        }
 
         private void HandleReadWrite(SocketAsyncEventArgs readWriteArgs) {
             var client = (HttpClient)readWriteArgs.UserToken;
@@ -227,13 +227,13 @@ namespace SAEAHTTPD {
             this.enforceMaxClients.Release();
         }
 
-		private void HandleReadWriteCompleted (object sender, SocketAsyncEventArgs e) {
-			HandleReadWrite (e);
-		}
+        private void HandleReadWriteCompleted (object sender, SocketAsyncEventArgs e) {
+            HandleReadWrite (e);
+        }
 
-		private void HandleAcceptCompleted (object sender, SocketAsyncEventArgs e) {
-			HandleAccept (e);
-		}
-	}
+        private void HandleAcceptCompleted (object sender, SocketAsyncEventArgs e) {
+            HandleAccept (e);
+        }
+    }
 }
 
